@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <title>Covid Data</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+            .summary{
+                font-size: 10px;
+                color: #000;
+                font-weight: lighter;
+                background-color: #f4c430 !important;
+            }
+        </style>
+    </head>
+<body>
+<script src="js/main.js" type="module"></script>    
+<script src="https://code.highcharts.com/stock/highstock.js"></script>
+<script src="https://code.highcharts.com/stock/modules/data.js"></script>
+<script src="https://code.highcharts.com/stock/modules/exporting.js"></script>
+<script src="https://code.highcharts.com/stock/modules/export-data.js"></script>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+<script src="js/covid-vis.js"></script>
+
+
+<script>
+
+    const dataUrl = 'https://api.covid19india.org/v4/min/timeseries.min.json';
+    var isPrevDayEnabled=true;
+    var isWeekly = false;
+    $(document).ready(function(){
+        $('input[type="checkbox"]').click(function(){
+            isWeekly = $(this).prop("checked");
+        });
+        initChart('TT');
+    });
+
+    count = 0;
+    var states = [];
+    var seriesFlags=[];
+    const autoChart = () => initChart(states[count++]);
+    const numberWithCommas = x => x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    const fomatVal = (val) => {
+        return (val >=1000 && val < 100000)?(Math.round((val/1000))+"K"):((val >= 100000 && val < 10000000)?Math.round((val/100000))+"L":val+"");
+    };
+    const dateDiff = (d1,d2) => Math.ceil((Math.abs(new Date(d2) - new Date(d1))) / (1000 * 60 * 60 * 24));
+    const dateFormat = (dt) => {
+        let d = new Date(dt);
+        let ye = new Intl.DateTimeFormat('en', { year: 'numeric' }).format(d);
+        let mo = new Intl.DateTimeFormat('en', { month: 'short' }).format(d);
+        let da = new Intl.DateTimeFormat('en', { day: '2-digit' }).format(d);
+        return ""+`${mo}-${ye}`;
+    };
+    const selectState =e=> initChart(document.getElementById('states').value);
+    let cdProm = new Promise(function(onDataSuccess,onError){
+        Highcharts.getJSON(dataUrl,function(val){
+            //TODO: Process / Clean val here before using
+            onDataSuccess(val);
+        });
+    });
+
+    var findPeaks = function(arr){
+        unSortedArr=[];
+        $.each(arr,function(dt,obj){
+            val=0;
+            try{
+                val = arr[dt]['delta']['confirmed'];
+            }catch(e){};
+            val=(val!=undefined)?val:0;
+            unSortedArr.push({'date':dt, 'value':val});
+        });
+        sortedArr = unSortedArr.sort(function (a, b) {
+            return (a.value- b.value);
+        });
+        sortedArr.reverse();
+        arrProbDates=[];
+        selDate=undefined;
+        dateMarker=[];
+        $.each(sortedArr,function(k,obj){
+            if(selDate!=undefined){
+                var delta = dateDiff(selDate,obj.date);
+                if(delta<0){
+                    delta = delta*(-1);
+                }
+                if(delta > 90){
+                    selDate=obj.date;
+                    if(!arrProbDates.includes(selDate) && !dateMarker.includes(dateFormat(selDate))){
+                        arrProbDates.push(selDate);
+                        dateMarker.push(dateFormat(selDate))
+                    }
+                }
+            }else{
+                selDate=obj.date;
+                arrProbDates.push(selDate);
+                dateMarker.push(dateFormat(selDate));
+            }
+        });
+        
+        //prepare marker data
+        count=0;
+        seriesFlags=[];
+        t=0;
+        $.each(arrProbDates,function(i,v){
+            try{
+                t=arr[v]['delta']['confirmed'];
+            }catch(e){};
+            t=(t!=undefined)?t:0;
+            ++count;
+            seriesFlags.push({'x':new Date(v),'title':''+fomatVal(t)+'', 'text':'Wave Peak # '+count});
+        });
+    }; 
+
+    var initChart = function(state){
+        cdProm.then(function(val){
+            applyCovidData(val,state);
+        });
+    };
+
+    var createChart = function(state){
+        Highcharts.stockChart('container', {
+                chart: {
+                    alignTicks: false,
+                    backgroundColor:'#003f5c'
+                },
+                title: {
+                    text: '<h1>'+ARR_STATES[state]+'</h1><br/><div class="summary">Confirmed:&nbsp;'+numberWithCommas(TOTAL_CONFIRMED)
+                        +', Active:&nbsp;'+numberWithCommas(TOTAL_ACTIVE)
+                        +', Deceased:&nbsp;'+numberWithCommas(TOTAL_DECEASED)
+                        +', Tested:&nbsp;'+numberWithCommas(TOTAL_TESTED)
+                        +', Recovered:&nbsp;'+numberWithCommas(TOTAL_RECOVERED)
+                        +', Vaccinated:&nbsp;'+numberWithCommas(TOTAL_VACCINATED)+'</div>',
+                    style: {
+                        color: '#fff',
+                        fontWeight: 'bold'
+                    }
+                },
+
+                navigator: {
+                    handles: {
+                        backgroundColor: '#000',
+                        borderColor: '#85C1E9'
+                    },
+                    outlineColor: '#85C1E9'
+                },
+
+                scrollbar: {enabled: false},
+
+                xAxis: {
+                    gridLineColor: '#fff',
+                    gridLineDashStyle: 'ShortDash',
+                    gridLineWidth: 0.2,
+                    lineColor: '#000',
+                    lineWidth: .75,
+                    labels: { style: {color: '#fff'}}                    
+                },
+
+                yAxis: {
+                    gridLineColor: '#fff',
+                    gridLineDashStyle: 'ShortDash',
+                    gridLineWidth: 0.2,
+                    lineColor: '#000',
+                    lineWidth: .75,
+                    labels: { style: {color: '#fff'}}   
+                },
+
+                tooltip: {
+                    formatter: function () {
+                        var options = { year: 'numeric', month: 'numeric', day: 'numeric' };
+                        var dp  = new Date(this.x);
+                        return this.points.reduce(function (s, point) {
+                            return s + '<br/>' + point.series.name + ': <b>&nbsp;' +
+                                numberWithCommas(point.y) + '</b>';
+                        }, '<b>' + dp.toLocaleDateString("hi-IN",options) + ' Cases</b>');
+                    },
+                    shared: true
+                },
+
+                rangeSelector: {
+                    buttonTheme: {
+                        fill: 'none',
+                        stroke: 'none',
+                        'stroke-width': 0,
+                        r: 8,
+                        style: {
+                            color: '#8C9EFF',
+                            fontWeight: 'bold'
+                        },
+                        states: {
+                            hover: {
+                            },
+                            select: {
+                                fill: '#8C9EFF',
+                                style: {
+                                    color: 'white'
+                                }
+                            }
+                        }
+                    },
+                    inputBoxBorderColor: '#8C9EFF',
+                    inputBoxWidth: 120,
+                    inputBoxHeight: 18,
+                    inputEnabled: false,
+                    inputStyle: {
+                        color: '#fff',
+                        fontWeight: 'bold'
+                    },
+                    labelStyle: {
+                        color: '#fff'
+                    },
+                    selected: 5
+                },
+        
+                series: [{
+                    type: 'column',
+                    color: '#ffa600',
+                    name: 'Daily',
+                    data: data,
+                    id: 'daily'
+                },
+                {
+                    type: 'flags',
+                    data: seriesFlags,
+                    onSeries: 'daily',
+                    shape: 'squarepin',
+                    width: 16
+                },
+                {
+                    type: 'line',
+                    color: '#c1e7ff',
+                    dashStyle: 'ShortDash',
+                    name: 'Avg. Weekly',
+                    data: avgWeekData,
+                    lineWidth: 1.5                    
+                },
+                {
+                    type: 'line',
+                    color: '#222',
+                    dashStyle: 'ShortDash',
+                    name: 'Avg. Daily',
+                    data: avgDailyData,
+                    lineWidth: 1.5                    
+                },
+                {
+                    type: 'line',
+                    color: '#00ff00',
+                    dashStyle: 'Solid',
+                    name: 'Delta Previous Day',
+                    data: prevDayDiffArr,
+                    lineWidth: 0.75,
+                    visible: isPrevDayEnabled                    
+                }]
+            });
+    };
+
+    var applyCovidData = function(rawData,state){
+            $.each(Object.keys(rawData),function(k,v){
+                states.push(v);
+            });
+            findPeaks(rawData[state]['dates']);
+            TOTAL_CONFIRMED=0;
+            TOTAL_ACTIVE=0;
+            TOTAL_DECEASED=0;
+            TOTAL_VACCINED=0;
+            TOTAL_RECOVERED=0;
+            TOTAL_TESTED=0;
+
+            //Global Information
+            allDates = rawData[state]['dates'];
+            keys = Object.keys(allDates);
+            mostCurrentDate = keys[keys.length-1];
+            gi=allDates[mostCurrentDate]['total'];
+            TOTAL_CONFIRMED=gi['confirmed'];
+            TOTAL_DECEASED=gi['deceased'];
+            TOTAL_RECOVERED=gi['recovered'];
+            TOTAL_TESTED=gi['tested'];
+            TOTAL_VACCINATED=gi['vaccinated'];
+            TOTAL_ACTIVE=(TOTAL_CONFIRMED - TOTAL_RECOVERED - TOTAL_DECEASED);
+
+            data=[];
+            dataTotal=[];
+            weeklyData=[];
+            avgWeekData=[];
+            avgDailyData=[];
+            prevDayDiffArr=[];
+            n=0;
+            nSum=0;
+            c=0;
+            nDailySum=0;
+            //KA data
+            prevVal=undefined;
+            $.each(rawData[state]['dates'],function(k,v){
+                val = 0;
+                tval=0;
+                wval=0;
+                avgVal=0;
+                c+=1;
+                prevDayDiff=0;
+                try{
+                    val = v['delta']['confirmed'];
+                }catch(e){}
+                try{
+                    tval = v['total']['confirmed'];
+                }catch(e){}
+                try{
+                    wval = v['delta7']['confirmed'];
+                }catch(e){}
+                try{
+                    avgVal = v['delta']['confirmed'];
+                }catch(e){}
+                val = (val!=undefined)?val:0;
+                tval = (tval!=undefined)?tval:0;
+                wval = (wval!=undefined)?wval:0;
+                avgVal = (avgVal!=undefined)?avgVal:0;
+                nSum+=avgVal;
+                if(c%7==0){
+                    n++;
+                }
+                avgVal = (nSum/n);
+                nDailySum+=val;
+
+                if(prevVal!=undefined){
+                    prevDayDiff=(val-prevVal);
+                    prevDayDiff=(prevDayDiff>0)?prevDayDiff:(prevDayDiff*(-1));
+                }
+
+                var d = new Date(k);
+                data.push([d.getTime(),val]);
+                dataTotal.push([d.getTime(),tval]);
+                weeklyData.push([d.getTime(),wval]);
+                avgWeekData.push([d.getTime(),Math.round(avgVal)]);
+                avgDailyData.push([d.getTime(),Math.round((nDailySum/c))]);
+                if(isPrevDayEnabled){
+                    prevDayDiffArr.push([d.getTime(),prevDayDiff]);
+                }
+
+                prevVal=val;
+            });
+
+            //Apply Data to chart
+            createChart(state);
+
+        //Process Chart Data
+       processChartData(rawData,state);
+    };
+
+    var processChartData = function(rawData,state){
+            $.each(Object.keys(rawData),function(k,v){
+                states.push(v);
+            });
+            findPeaks(rawData[state]['dates']);
+            TOTAL_CONFIRMED=0;
+            TOTAL_ACTIVE=0;
+            TOTAL_DECEASED=0;
+            TOTAL_VACCINED=0;
+            TOTAL_RECOVERED=0;
+            TOTAL_TESTED=0;
+
+            //Global Information
+            allDates = rawData[state]['dates'];
+            keys = Object.keys(allDates);
+            mostCurrentDate = keys[keys.length-1];
+            gi=allDates[mostCurrentDate]['total'];
+            TOTAL_CONFIRMED=gi['confirmed'];
+            TOTAL_DECEASED=gi['deceased'];
+            TOTAL_RECOVERED=gi['recovered'];
+            TOTAL_TESTED=gi['tested'];
+            TOTAL_VACCINATED=gi['vaccinated'];
+            TOTAL_ACTIVE=(TOTAL_CONFIRMED - TOTAL_RECOVERED - TOTAL_DECEASED);
+
+            data=[];
+            dataTotal=[];
+            weeklyData=[];
+            avgWeekData=[];
+            avgDailyData=[];
+            prevDayDiffArr=[];
+            n=0;
+            nSum=0;
+            c=0;
+            nDailySum=0;
+            //KA data
+            prevVal=undefined;
+            $.each(rawData[state]['dates'],function(k,v){
+                val = 0;
+                tval=0;
+                wval=0;
+                avgVal=0;
+                c+=1;
+                prevDayDiff=0;
+                try{
+                    val = v['delta']['confirmed'];
+                }catch(e){}
+                try{
+                    tval = v['total']['confirmed'];
+                }catch(e){}
+                try{
+                    wval = v['delta7']['confirmed'];
+                }catch(e){}
+                try{
+                    avgVal = v['delta']['confirmed'];
+                }catch(e){}
+                val = (val!=undefined)?val:0;
+                tval = (tval!=undefined)?tval:0;
+                wval = (wval!=undefined)?wval:0;
+                avgVal = (avgVal!=undefined)?avgVal:0;
+                nSum+=avgVal;
+                if(c%7==0){
+                    n++;
+                }
+                avgVal = (nSum/n);
+                nDailySum+=val;
+
+                if(prevVal!=undefined){
+                    prevDayDiff=(val-prevVal);
+                    prevDayDiff=(prevDayDiff>0)?prevDayDiff:(prevDayDiff*(-1));
+                }
+
+                var d = new Date(k);
+                data.push([d.getTime(),val]);
+                dataTotal.push([d.getTime(),tval]);
+                weeklyData.push([d.getTime(),wval]);
+                avgWeekData.push([d.getTime(),Math.round(avgVal)]);
+                avgDailyData.push([d.getTime(),Math.round((nDailySum/c))]);
+                if(isPrevDayEnabled){
+                    prevDayDiffArr.push([d.getTime(),prevDayDiff]);
+                }
+
+                prevVal=val;
+            });            
+    };
+</script>
+<div class="title">
+    <table>
+        <tr>
+          <td>
+            <select name="states" id="states" onchange="selectState(event);">
+                <option value="volvo">--SELECT--</option>
+                <option value="AN">Andaman and Nicobar Islands</option>
+                <option value="AP">Andhra Pradesh</option>
+                <option value="AR">Arunachal Pradesh</option>
+                <option value="AS">Assam</option>
+                <option value="BR">Bihar</option>
+                <option value="CH">Chandigadh</option>
+                <option value="CT">Chhattisgarh</option>
+                <option value="DL">Delhi</option>
+                <option value="DN">Dadra and Nagar Haveli and Daman and Diu</option>
+                <option value="GA">Goa</option>
+                <option value="GJ">Gujarat</option>
+                <option value="HP">Himachal Pradesh</option>
+                <option value="HR">Haryana</option>
+                <option value="JH">Jharkhand</option>
+                <option value="JK">Jammu Kashmir</option>
+                <option value="KA">Karnataka</option>
+                <option value="KL">Kerela</option>
+                <option value="LA">Laddakh</option>
+                <option value="LD">Lakshdweep</option>
+                <option value="MH">Maharashta</option>
+                <option value="ML">Meghalaya</option>
+                <option value="MN">Manipur</option>
+                <option value="MP">Madhya Pradesh</option>
+                <option value="MZ">Mizoram</option>
+                <option value="NL">Nagaland</option>
+                <option value="OR">Orissa</option>
+                <option value="PB">Punjab</option>
+                <option value="PY">Pondicherry</option>
+                <option value="RJ">Rajasthan</option>
+                <option value="SK">Sikkim</option>
+                <option value="TG">Telangana</option>
+                <option value="TN">Tamil Nadu</option>
+                <option value="TR">Tripura</option>
+                <option value="TT">India</option>
+                <option value="UN">UN</option>
+                <option value="UP">Uttar Pradesh</option>
+                <option value="UT">Uttarakhand</option>
+                <option value="WB">West Bengal</option>
+                </select>
+            </select>
+          </td>
+          <td><div class="info"></div></td>
+          <td><input type="checkbox" id="weekly" name="weekly" value="true"><label for="weekly">Weekly</label></td>
+          <td><input type="checkbox" id="prevDayDelta" name="prevDayDelta" value="true"><label for="prevDayDelta">Show Previous Day Delta</label></td>
+        </tr>
+      </table>
+</div>
+<div id="container" style="height: 550px"></div>
+</body>
+</html>
