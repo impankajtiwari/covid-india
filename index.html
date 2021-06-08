@@ -50,9 +50,17 @@
     var states = [];
     var seriesFlags=[];
     const autoChart = () => initChart(states[count++]);
-    const numberWithCommas = x => x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    const numberWithCommas = x => {
+        if(x){
+            x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        }
+    }
     const fomatVal = (val) => {
-        return (val >=1000 && val < 100000)?(Math.round((val/1000))+"K"):((val >= 100000 && val < 10000000)?Math.round((val/100000))+"L":val+"");
+        if(val){
+            return (val >=1000 && val < 100000)?(Math.round((val/1000))+"K"):((val >= 100000 && val < 10000000)?Math.round((val/100000))+"L":val+"");
+        }else{
+            return 0;
+        }
     };
     const dateDiff = (d1,d2) => Math.ceil((Math.abs(new Date(d2) - new Date(d1))) / (1000 * 60 * 60 * 24));
     const dateFormat = (dt) => {
@@ -179,6 +187,7 @@
                         var options = { year: 'numeric', month: 'numeric', day: 'numeric' };
                         var dp  = new Date(this.x);
                         return this.points.reduce(function (s, point) {
+                            console.log(point);
                             return s + '<br/>' + point.series.name + ': <b>&nbsp;' +
                                 numberWithCommas(point.y) + '</b>';
                         }, '<b>' + dp.toLocaleDateString("hi-IN",options) + ' Cases</b>');
