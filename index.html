@@ -52,7 +52,9 @@
     const autoChart = () => initChart(states[count++]);
     const numberWithCommas = x => {
         if(x){
-            x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+            return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        }else{
+            return 0;
         }
     }
     const fomatVal = (val) => {
@@ -186,11 +188,14 @@
                     formatter: function () {
                         var options = { year: 'numeric', month: 'numeric', day: 'numeric' };
                         var dp  = new Date(this.x);
-                        return this.points.reduce(function (s, point) {
-                            console.log(point);
-                            return s + '<br/>' + point.series.name + ': <b>&nbsp;' +
-                                numberWithCommas(point.y) + '</b>';
-                        }, '<b>' + dp.toLocaleDateString("hi-IN",options) + ' Cases</b>');
+                        if(this && this.points){
+                            return this.points.reduce(function (s, point) {
+                                return s +'<br/>' + point.series.name + ': <b>&nbsp;' +
+                                    numberWithCommas(point.y) + '</b>';
+                            }, '<b>' + dp.toLocaleDateString("hi-IN",options) + ' Cases</b>');
+                        }else{
+                            return this.points;
+                        }
                     },
                     shared: true
                 },
@@ -317,16 +322,18 @@
                 prevDayDiff=0;
                 try{
                     val = v['delta']['confirmed'];
-                }catch(e){}
+                }catch(e){
+                    val=0;
+                }
                 try{
                     tval = v['total']['confirmed'];
-                }catch(e){}
+                }catch(e){tval=0;}
                 try{
                     wval = v['delta7']['confirmed'];
-                }catch(e){}
+                }catch(e){wval=0;}
                 try{
                     avgVal = v['delta']['confirmed'];
-                }catch(e){}
+                }catch(e){avgVal=0;}
                 val = (val!=undefined)?val:0;
                 tval = (tval!=undefined)?tval:0;
                 wval = (wval!=undefined)?wval:0;
@@ -344,7 +351,12 @@
                 }
 
                 var d = new Date(k);
-                data.push([d.getTime(),val]);
+                if(val!=undefined){
+                    data.push([d.getTime(),val]);
+                }else{
+                    console.log("----------------");
+                    console.log(val);
+                }
                 dataTotal.push([d.getTime(),tval]);
                 weeklyData.push([d.getTime(),wval]);
                 avgWeekData.push([d.getTime(),Math.round(avgVal)]);
